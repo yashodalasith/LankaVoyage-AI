@@ -72,19 +72,40 @@ source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-## Run Research and Optimizer Agents
+## Run Full Multi-Agent Workflow
 
 ```bash
 # Pull local model once
 ollama pull llama3.2
 
-# Run the orchestrated research + optimizer flow
+# Run the orchestrated research + optimizer + personalizer flow
 python main.py "Plan a 4-day budget trip to Ella from Colombo under 80000 LKR"
+
+# Optional: choose output filename
+python main.py "Plan a 4-day budget trip to Ella from Colombo under 80000 LKR" --output itinerary.md
 ```
 
-The command runs the research agent first, then passes verified data into the optimizer agent. Both stages emit structured JSON, including decision logs and reasoning summaries, and append trace events to `logs/optimizer_trace.jsonl`.
+The command runs all three agents in sequence and prints a structured JSON response.
+
+- Research Agent -> verified data retrieval and summary
+- Optimizer Agent -> constrained planning and feasibility checks
+- Personalizer Agent -> final user-friendly response and report generation
+
+Each stage writes real-time communication and tool-call logs to `logs/run.log` and structured event traces to `logs/events.jsonl`. Optimizer planning traces are appended to `logs/optimizer_trace.jsonl`.
+
+The final report is generated as `itinerary.md` (or your `--output` filename).
 
 If Ollama is not running, both agents still return verified DB-backed findings using deterministic fallback summaries.
+
+## Demo Video Checklist
+
+For a 4-5 minute demo recording, you can show:
+
+1. Running `python main.py "Plan a 4-day budget trip to Ella from Colombo under 80000 LKR"`
+2. Live terminal logs showing stage transitions and tool calls in `logs/run.log`
+3. Inter-agent handoff events in `logs/events.jsonl` and `logs/optimizer_trace.jsonl`
+4. Final generated file opening (`itinerary.md`)
+5. Test run (`pytest -q`) to prove stability
 
 ## Run Tests
 
