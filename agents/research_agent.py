@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass
 from typing import Any, Dict, List
 from urllib import error, request
@@ -20,9 +21,15 @@ class ResearchAgentResult:
 class ResearchAgent:
     """Research agent that gathers verified data and summarizes with a local LLM."""
 
-    def __init__(self, model: str = "llama3.2", ollama_url: str = "http://localhost:11434/api/generate"):
+    def __init__(
+        self,
+        model: str = "llama3.2",
+        ollama_url: str = "http://localhost:11434/api/generate",
+        request_timeout_seconds: int = 90,
+    ):
         self.model = model
         self.ollama_url = ollama_url
+        self.request_timeout_seconds = request_timeout_seconds
 
     def run(self, user_query: str, limit: int = 10) -> ResearchAgentResult:
         records = tourism_db_query(user_query, limit=limit)
@@ -95,14 +102,19 @@ class ResearchAgent:
             method="POST",
         )
 
-        try:
-            with request.urlopen(req, timeout=30) as response:
-                body = response.read().decode("utf-8")
-                parsed = json.loads(body)
-                text = parsed.get("response", "").strip()
-                return text if text else None
-        except (error.URLError, TimeoutError, json.JSONDecodeError, OSError):
-            return None
+        attempts = 2
+        for attempt in range(1, attempts + 1):
+            try:
+                with request.urlopen(req, timeout=self.request_timeout_seconds) as response:
+                    body = response.read().decode("utf-8")
+                    parsed = json.loads(body)
+                    text = parsed.get("response", "").strip()
+                    return text if text else None
+            except (error.URLError, TimeoutError, json.JSONDecodeError, OSError):
+                if attempt < attempts:
+                    time.sleep(1)
+                    continue
+                return None
 
     def _fallback_summary(self, user_query: str, records: List[Dict[str, Any]]) -> str:
         if not records:
