@@ -33,7 +33,12 @@ class PersonalizerAgent:
         self.ollama_url = ollama_url
         self.request_timeout_seconds = request_timeout_seconds
 
-    def run(self, user_query: str, optimizer_result: OptimizerAgentResult) -> PersonalizerAgentResult:
+    def run(
+        self,
+        user_query: str,
+        optimizer_result: OptimizerAgentResult,
+        output_filename: str = "itinerary.md",
+    ) -> PersonalizerAgentResult:
         log_event(
             "personalizer",
             "agent_started",
@@ -41,6 +46,7 @@ class PersonalizerAgent:
                 "query": user_query,
                 "optimizer_model": optimizer_result.model_used,
                 "optimizer_used_fallback": optimizer_result.used_fallback,
+                "output_filename": output_filename,
             },
         )
 
@@ -64,7 +70,7 @@ class PersonalizerAgent:
             model_used = self.model
 
         personalized_plan["personalized_summary"] = personalized_summary
-        report_path = report_generator(personalized_plan)
+        report_path = report_generator(personalized_plan, filename=output_filename)
 
         result = PersonalizerAgentResult(
             query=user_query,
