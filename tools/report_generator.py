@@ -6,7 +6,8 @@ from typing import Any, Dict, List
 from tools.observability import log_event
 
 WORKSPACE_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_OUTPUT_FILE = WORKSPACE_ROOT / "itinerary.md"
+OUTPUT_DIR = WORKSPACE_ROOT / "output"
+DEFAULT_OUTPUT_FILE = OUTPUT_DIR / "itinerary.md"
 
 
 def report_generator(final_plan: Dict[str, Any], filename: str = "itinerary.md") -> str:
@@ -19,7 +20,10 @@ def report_generator(final_plan: Dict[str, Any], filename: str = "itinerary.md")
     Returns:
         Absolute path to the generated markdown file.
     """
-    output_path = WORKSPACE_ROOT / filename
+    requested = Path(filename)
+    output_filename = requested.name
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    output_path = OUTPUT_DIR / output_filename
     log_event("tool-report", "report_generation_started", {"output": str(output_path)})
 
     trip_summary = final_plan.get("trip_summary", {})
