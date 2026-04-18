@@ -72,17 +72,19 @@ source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-## Run Research Agent
+## Run Research and Optimizer Agents
 
 ```bash
 # Pull local model once
 ollama pull llama3.2
 
-# Run research agent
+# Run the orchestrated research + optimizer flow
 python main.py "Plan a 4-day budget trip to Ella from Colombo under 80000 LKR"
 ```
 
-If Ollama is not running, the research agent still returns verified DB-backed findings using a deterministic fallback summary.
+The command runs the research agent first, then passes verified data into the optimizer agent. Both stages emit structured JSON, including decision logs and reasoning summaries, and append trace events to `logs/optimizer_trace.jsonl`.
+
+If Ollama is not running, both agents still return verified DB-backed findings using deterministic fallback summaries.
 
 ## Run Tests
 
