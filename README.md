@@ -71,3 +71,21 @@ source venv/bin/activate   # Windows: venv\Scripts\activate
 # Install dependencies
 pip install -r requirements.txt
 ```
+
+## Run Research Agent
+
+```bash
+# Pull local model once
+ollama pull llama3.2
+
+# Run research agent
+python main.py "Plan a 4-day budget trip to Ella from Colombo under 80000 LKR"
+```
+
+If Ollama is not running, the research agent still returns verified DB-backed findings using a deterministic fallback summary.
+
+## Run Tests
+
+```bash
+pytest -q
+```
