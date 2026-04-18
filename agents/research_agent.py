@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List
 from urllib import error, request
 
+from tools.observability import log_event
 from tools.tourism_db import tourism_db_query
 
 
@@ -32,9 +33,12 @@ class ResearchAgent:
         self.request_timeout_seconds = request_timeout_seconds
 
     def run(self, user_query: str, limit: int = 10) -> ResearchAgentResult:
+        log_event("research", "agent_started", {"query": user_query, "limit": limit})
         records = tourism_db_query(user_query, limit=limit)
+        log_event("research", "tool_response_received", {"records_count": len(records)})
         if records and "error" in records[0]:
             fallback = f"Unable to retrieve tourism facts: {records[0]['error']}"
+            log_event("research", "tool_error", {"error": records[0]["error"]})
             return ResearchAgentResult(
                 query=user_query,
                 records=[],
@@ -44,10 +48,12 @@ class ResearchAgent:
             )
 
         prompt = self._build_prompt(user_query, records)
+        log_event("research", "llm_request_prepared", {"model": self.model, "prompt_chars": len(prompt)})
         llm_response = self._call_ollama(prompt)
 
         if llm_response is None:
             summary = self._fallback_summary(user_query, records)
+            log_event("research", "fallback_used", {"reason": "llm_unavailable_or_invalid"})
             return ResearchAgentResult(
                 query=user_query,
                 records=records,
@@ -56,6 +62,7 @@ class ResearchAgent:
                 used_fallback=True,
             )
 
+        log_event("research", "agent_completed", {"model_used": self.model, "used_fallback": False})
         return ResearchAgentResult(
             query=user_query,
             records=records,
@@ -105,12 +112,14 @@ class ResearchAgent:
         attempts = 2
         for attempt in range(1, attempts + 1):
             try:
+                log_event("research", "llm_call_attempt", {"attempt": attempt, "model": self.model})
                 with request.urlopen(req, timeout=self.request_timeout_seconds) as response:
                     body = response.read().decode("utf-8")
                     parsed = json.loads(body)
                     text = parsed.get("response", "").strip()
                     return text if text else None
             except (error.URLError, TimeoutError, json.JSONDecodeError, OSError):
+                log_event("research", "llm_call_failed", {"attempt": attempt})
                 if attempt < attempts:
                     time.sleep(1)
                     continue

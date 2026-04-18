@@ -72,3 +72,13 @@ def test_optimizer_agent_uses_ollama_response(monkeypatch):
     assert result.used_fallback is False
     assert result.model_used == "llama3.2"
     assert result.summary == "Optimized itinerary summary"
+
+
+def test_optimizer_agent_parses_origin_destination_with_extra_phrases():
+    agent = OptimizerAgent(model="llama3.2")
+    preferences = agent._parse_preferences(
+        "Plan a 4-day budget trip to Ella from Colombo for a couple, max 80000 LKR, focus on nature and hiking"
+    )
+
+    assert preferences["origin"] == "Colombo"
+    assert preferences["destination"] == "Ella"

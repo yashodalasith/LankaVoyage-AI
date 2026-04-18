@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
+from tools.observability import log_event
 from tools.tourism_db import DEFAULT_DB_PATH, tourism_db_query
 from tools.trace_logger import append_trace
 
@@ -28,6 +29,11 @@ def itinerary_optimizer(
     The function prioritizes lower-cost attractions first, keeps the plan within the
     requested day count, and returns a structured optimization trace for visibility.
     """
+    log_event(
+        "optimizer-engine",
+        "planner_started",
+        {"budget": budget, "days": days, "incoming_records": len(research_data)},
+    )
     append_trace(
         "optimizer_input",
         {
@@ -55,12 +61,14 @@ def itinerary_optimizer(
 
         if len(selected_places) >= max(1, days * 2):
             decision_log.append("Stopped selection after reaching the attraction count cap for the requested trip length.")
+            log_event("optimizer-engine", "selection_cap_reached", {"selected_count": len(selected_places)})
             break
 
         if running_cost + place_cost > attraction_budget:
             decision_log.append(
                 f"Skipped {place.get('name')} because adding {place_cost} LKR would exceed the attraction budget cap of {attraction_budget} LKR."
             )
+            log_event("optimizer-engine", "candidate_skipped_budget", {"name": place.get("name"), "cost": place_cost})
             continue
 
         selected_places.append(
@@ -78,6 +86,7 @@ def itinerary_optimizer(
         decision_log.append(
             f"Selected {place.get('name')} because it fits the budget and adds {place_hours:.1f} hours of activity value."
         )
+        log_event("optimizer-engine", "candidate_selected", {"name": place.get("name"), "cost": place_cost, "hours": place_hours})
 
     if not selected_places and research_data:
         first_place = research_data[0]
@@ -132,6 +141,15 @@ def itinerary_optimizer(
     }
 
     append_trace("optimizer_output", result)
+    log_event(
+        "optimizer-engine",
+        "planner_completed",
+        {
+            "selected_count": len(selected_places),
+            "total_cost_lkr": total_cost,
+            "within_budget": result["feasibility"]["within_budget"],
+        },
+    )
     return result
 
 
@@ -175,17 +193,25 @@ def _distribute_places_across_days(
     selected_places: List[OptimizationSelection],
     days: int,
 ) -> List[Dict[str, Any]]:
-    if not selected_places:
-        return []
-
     total_days = max(1, days)
     buckets: List[List[OptimizationSelection]] = [[] for _ in range(total_days)]
-    for index, place in enumerate(selected_places):
-        buckets[index % total_days].append(place)
+    if selected_places:
+        for index, place in enumerate(selected_places):
+            buckets[index % total_days].append(place)
 
     plan: List[Dict[str, Any]] = []
     for day_index, bucket in enumerate(buckets, start=1):
         if not bucket:
+            plan.append(
+                {
+                    "day": day_index,
+                    "theme": "light-exploration",
+                    "stops": [],
+                    "day_cost_lkr": 0,
+                    "day_duration_hours": 0.0,
+                    "note": "Low-activity buffer day for rest, local cafes, or weather adjustments.",
+                }
+            )
             continue
         plan.append(
             {
