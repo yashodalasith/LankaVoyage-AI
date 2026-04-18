@@ -101,13 +101,23 @@ class OptimizerAgent:
         lowered = user_query.lower()
         budget_match = re.search(r"(?:under|max(?:imum)?|budget(?:\s+of)?)\s+([0-9][0-9,]*)\s*lkr", lowered)
         days_match = re.search(r"([0-9]+)\s*[- ]?day", lowered)
-        route_match = re.search(r"to\s+([a-z ]+?)\s+from\s+([a-z ]+?)(?:\s+under|\s+max|\s+budget|$)", lowered)
+        route_to_from_match = re.search(
+            r"to\s+([a-z ]+?)\s+from\s+([a-z ]+?)(?:\s+for|\s+under|\s+max|\s+budget|\s+with|\s+focus|$)",
+            lowered,
+        )
+        route_from_to_match = re.search(
+            r"from\s+([a-z ]+?)\s+to\s+([a-z ]+?)(?:\s+for|\s+under|\s+max|\s+budget|\s+with|\s+focus|$)",
+            lowered,
+        )
 
         destination = "Unknown"
         origin = "Unknown"
-        if route_match:
-            destination = route_match.group(1).strip().title()
-            origin = route_match.group(2).strip().title()
+        if route_to_from_match:
+            destination = route_to_from_match.group(1).strip().title()
+            origin = route_to_from_match.group(2).strip().title()
+        elif route_from_to_match:
+            origin = route_from_to_match.group(1).strip().title()
+            destination = route_from_to_match.group(2).strip().title()
 
         interests = [
             keyword

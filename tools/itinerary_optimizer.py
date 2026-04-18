@@ -193,17 +193,25 @@ def _distribute_places_across_days(
     selected_places: List[OptimizationSelection],
     days: int,
 ) -> List[Dict[str, Any]]:
-    if not selected_places:
-        return []
-
     total_days = max(1, days)
     buckets: List[List[OptimizationSelection]] = [[] for _ in range(total_days)]
-    for index, place in enumerate(selected_places):
-        buckets[index % total_days].append(place)
+    if selected_places:
+        for index, place in enumerate(selected_places):
+            buckets[index % total_days].append(place)
 
     plan: List[Dict[str, Any]] = []
     for day_index, bucket in enumerate(buckets, start=1):
         if not bucket:
+            plan.append(
+                {
+                    "day": day_index,
+                    "theme": "light-exploration",
+                    "stops": [],
+                    "day_cost_lkr": 0,
+                    "day_duration_hours": 0.0,
+                    "note": "Low-activity buffer day for rest, local cafes, or weather adjustments.",
+                }
+            )
             continue
         plan.append(
             {

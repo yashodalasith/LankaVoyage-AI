@@ -45,3 +45,5 @@ def test_itinerary_optimizer_builds_daily_plan(monkeypatch):
     assert result["cost_breakdown"]["total_lkr"] > 0
     assert result["feasibility"]["within_days"] is True
     assert result["decision_log"]
+    assert len(result["daily_plan"]) == 4
+    assert any(day.get("theme") == "light-exploration" for day in result["daily_plan"])
