@@ -4,6 +4,8 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Dict, List
 
+from tools.observability import log_event
+
 WORKSPACE_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DB_PATH = WORKSPACE_ROOT / "data" / "sri_lanka_tourism.db"
 DEFAULT_SEED_SQL_PATH = WORKSPACE_ROOT / "data" / "tourism_seed.sql"
@@ -26,6 +28,7 @@ def initialize_tourism_db(
     with sqlite3.connect(db_path) as connection:
         connection.executescript(sql_script)
         connection.commit()
+    log_event("tool-db", "database_initialized", {"db_path": str(db_path)})
 
 
 def tourism_db_query(query: str, limit: int = 10) -> List[Dict[str, Any]]:
@@ -39,6 +42,7 @@ def tourism_db_query(query: str, limit: int = 10) -> List[Dict[str, Any]]:
         List of dictionaries containing matching records.
     """
     try:
+        log_event("tool-db", "query_started", {"query": query, "limit": limit})
         initialize_tourism_db()
         normalized_limit = max(1, min(int(limit), 50))
         query_text = query.strip()
@@ -53,10 +57,15 @@ def tourism_db_query(query: str, limit: int = 10) -> List[Dict[str, Any]]:
             if query_text.lower().startswith("select"):
                 safe_sql = f"SELECT * FROM ({query_text.rstrip(';')}) LIMIT ?"
                 cursor.execute(safe_sql, (normalized_limit,))
-                return [dict(row) for row in cursor.fetchall()]
+                rows = [dict(row) for row in cursor.fetchall()]
+                log_event("tool-db", "query_completed", {"rows": len(rows), "mode": "sql"})
+                return rows
 
-            return _search_from_text(cursor, query_text, normalized_limit)
+            rows = _search_from_text(cursor, query_text, normalized_limit)
+            log_event("tool-db", "query_completed", {"rows": len(rows), "mode": "nl"})
+            return rows
     except Exception as exc:  # pragma: no cover - defensive path
+        log_event("tool-db", "query_failed", {"error": str(exc)})
         return [{"error": f"Database query failed: {exc}"}]
 
 
