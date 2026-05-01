@@ -105,8 +105,13 @@ def run_planning_workflow(
     graph = create_planning_graph()
 
     # Execute the workflow
+    # Note: graph.invoke() expects a dict, so we convert PlanningState to dict
     try:
-        final_state = graph.invoke(initial_state)
+        final_state_dict = graph.invoke(initial_state.model_dump())
+        
+        # Convert AddableValuesDict back to PlanningState
+        final_state = PlanningState(**final_state_dict)
+        
         log_event(
             "orchestrator",
             "workflow_completed",
