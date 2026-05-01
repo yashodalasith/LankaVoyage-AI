@@ -7,6 +7,7 @@ from typing import Any, Dict, List
 from urllib import error, request
 
 from agents.research_agent import ResearchAgentResult
+from tools.graph_state import PlanningState
 from tools.itinerary_optimizer import itinerary_optimizer
 from tools.observability import log_event
 from tools.trace_logger import append_trace
@@ -179,3 +180,55 @@ class OptimizerAgent:
             f"Total estimated cost is {cost_breakdown.get('total_lkr', 0)} LKR against the trip budget of {cost_breakdown.get('budget_lkr', 0)} LKR. "
             f"Feasibility checks show within_budget={feasibility.get('within_budget')} and within_days={feasibility.get('within_days')}."
         )
+
+
+# LangGraph node function
+def optimizer_node(state: PlanningState) -> PlanningState:
+    """LangGraph node that runs the optimizer agent and updates state.
+    
+    This node takes the planning state with research results,
+    runs the optimizer agent, and returns the updated state with
+    optimization outputs (itinerary plan, budget check, feasibility).
+    """
+    log_event(
+        "graph_node",
+        "optimizer_node_started",
+        {
+            "query": state.query,
+            "model": state.model,
+            "research_records": len(state.research_records),
+        },
+    )
+
+    # Build a research result object for the agent
+    research_result = ResearchAgentResult(
+        query=state.query,
+        records=state.research_records,
+        summary=state.research_summary,
+        model_used=state.research_model_used,
+        used_fallback=state.research_used_fallback,
+    )
+
+    agent = OptimizerAgent(model=state.model)
+    result = agent.run(user_query=state.query, research_result=research_result)
+
+    # Update state with optimizer outputs
+    state.preferences = result.preferences
+    state.optimized_plan = result.optimized_plan
+    state.optimizer_summary = result.summary
+    state.optimizer_model_used = result.model_used
+    state.optimizer_used_fallback = result.used_fallback
+
+    log_event(
+        "graph_node",
+        "optimizer_node_completed",
+        {
+            "preferences": result.preferences,
+            "selected_attractions": len(result.optimized_plan.get("selected_attractions", [])),
+            "model_used": result.model_used,
+            "used_fallback": result.used_fallback,
+        },
+    )
+
+    return state
+

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List
 from urllib import error, request
 
+from tools.graph_state import PlanningState
 from tools.observability import log_event
 from tools.tourism_db import tourism_db_query
 
@@ -140,3 +141,40 @@ class ResearchAgent:
             )
 
         return "\n".join(lines)
+
+
+# LangGraph node function
+def research_node(state: PlanningState) -> PlanningState:
+    """LangGraph node that runs the research agent and updates state.
+    
+    This node is called by the LangGraph StateGraph workflow.
+    It takes the current planning state, runs the research agent,
+    and returns the updated state with research outputs.
+    """
+    log_event(
+        "graph_node",
+        "research_node_started",
+        {"query": state.query, "model": state.model},
+    )
+
+    agent = ResearchAgent(model=state.model)
+    result = agent.run(user_query=state.query, limit=state.limit)
+
+    # Update state with research outputs
+    state.research_records = result.records
+    state.research_summary = result.summary
+    state.research_model_used = result.model_used
+    state.research_used_fallback = result.used_fallback
+
+    log_event(
+        "graph_node",
+        "research_node_completed",
+        {
+            "records_count": len(result.records),
+            "model_used": result.model_used,
+            "used_fallback": result.used_fallback,
+        },
+    )
+
+    return state
+
