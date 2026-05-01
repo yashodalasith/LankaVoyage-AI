@@ -6,6 +6,7 @@ from typing import Any, Dict, List
 from urllib import error, request
 
 from agents.optimizer_agent import OptimizerAgentResult
+from tools.graph_state import PlanningState
 from tools.observability import log_event
 from tools.report_generator import report_generator
 
@@ -152,3 +153,59 @@ class PersonalizerAgent:
             "Personalizer summary: your itinerary is organized into a readable day-by-day flow with "
             f"clear budget visibility. Planned duration is {days} day(s), with an estimated total of {cost} LKR."
         )
+
+
+# LangGraph node function
+def personalizer_node(state: PlanningState) -> PlanningState:
+    """LangGraph node that runs the personalizer agent and updates state.
+    
+    This node takes the planning state with optimization results,
+    runs the personalizer agent, and returns the final state with
+    personalized summary and generated report.
+    """
+    log_event(
+        "graph_node",
+        "personalizer_node_started",
+        {
+            "query": state.query,
+            "model": state.model,
+            "output_filename": state.output_filename,
+        },
+    )
+
+    # Build an optimizer result object for the agent
+    optimizer_result = OptimizerAgentResult(
+        query=state.query,
+        preferences=state.preferences,
+        optimized_plan=state.optimized_plan,
+        summary=state.optimizer_summary,
+        model_used=state.optimizer_model_used,
+        used_fallback=state.optimizer_used_fallback,
+    )
+
+    agent = PersonalizerAgent(model=state.model)
+    result = agent.run(
+        user_query=state.query,
+        optimizer_result=optimizer_result,
+        output_filename=state.output_filename,
+    )
+
+    # Update state with personalizer outputs
+    state.personalized_plan = result.personalized_plan
+    state.personalized_summary = result.personalized_summary
+    state.report_path = result.report_path
+    state.personalizer_model_used = result.model_used
+    state.personalizer_used_fallback = result.used_fallback
+
+    log_event(
+        "graph_node",
+        "personalizer_node_completed",
+        {
+            "report_path": result.report_path,
+            "model_used": result.model_used,
+            "used_fallback": result.used_fallback,
+        },
+    )
+
+    return state
+

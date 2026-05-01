@@ -3,9 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 
-from agents.optimizer_agent import OptimizerAgent
-from agents.personalizer_agent import PersonalizerAgent
-from agents.research_agent import ResearchAgent
+from tools.graph_orchestrator import run_planning_workflow
 from tools.observability import log_event
 from tools.tourism_db import initialize_tourism_db
 
@@ -37,47 +35,49 @@ def _build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = _build_parser().parse_args()
 
+    # Initialize database
     log_event("orchestrator", "workflow_started", {"query": args.query, "model": args.model})
     initialize_tourism_db()
     log_event("orchestrator", "database_ready", {})
 
-    research_agent = ResearchAgent(model=args.model)
-    research_result = research_agent.run(user_query=args.query, limit=args.limit)
-    log_event(
-        "orchestrator",
-        "handoff_research_to_optimizer",
-        {"records_count": len(research_result.records), "research_model": research_result.model_used},
-    )
-
-    optimizer_agent = OptimizerAgent(model=args.model)
-    optimizer_result = optimizer_agent.run(user_query=args.query, research_result=research_result)
-    log_event(
-        "orchestrator",
-        "handoff_optimizer_to_personalizer",
-        {
-            "within_budget": optimizer_result.optimized_plan.get("feasibility", {}).get("within_budget"),
-            "optimizer_model": optimizer_result.model_used,
-        },
-    )
-
-    personalizer_agent = PersonalizerAgent(model=args.model)
-    personalizer_result = personalizer_agent.run(
-        user_query=args.query,
-        optimizer_result=optimizer_result,
+    # Run the LangGraph workflow
+    final_state = run_planning_workflow(
+        query=args.query,
+        model=args.model,
+        limit=args.limit,
         output_filename=args.output,
     )
 
+    # Build output JSON with full workflow results
     output = {
-        "query": args.query,
-        "research": research_result.__dict__,
-        "optimizer": optimizer_result.__dict__,
-        "personalizer": personalizer_result.__dict__,
+        "query": final_state.query,
+        "research": {
+            "records": final_state.research_records,
+            "summary": final_state.research_summary,
+            "model_used": final_state.research_model_used,
+            "used_fallback": final_state.research_used_fallback,
+        },
+        "optimizer": {
+            "preferences": final_state.preferences,
+            "optimized_plan": final_state.optimized_plan,
+            "summary": final_state.optimizer_summary,
+            "model_used": final_state.optimizer_model_used,
+            "used_fallback": final_state.optimizer_used_fallback,
+        },
+        "personalizer": {
+            "personalized_plan": final_state.personalized_plan,
+            "personalized_summary": final_state.personalized_summary,
+            "report_path": final_state.report_path,
+            "model_used": final_state.personalizer_model_used,
+            "used_fallback": final_state.personalizer_used_fallback,
+        },
     }
+
     log_event(
         "orchestrator",
         "workflow_completed",
         {
-            "report_path": personalizer_result.report_path,
+            "report_path": final_state.report_path,
             "run_log": "logs/run.log",
         },
     )
